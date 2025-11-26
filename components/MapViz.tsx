@@ -16,12 +16,31 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
   const [countries, setCountries] = useState<any>(null);
   const [transform, setTransform] = useState<{ k: number; x: number; y: number }>({ k: 1, x: 0, y: 0 });
   const [hoveredAnchor, setHoveredAnchor] = useState<string | null>(null);
+  // Dark mode (persisted)
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('map:darkMode') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Base scale / world width (fixed baseline used for wrapping that does NOT depend on zoom k)
+  const baseScaleRef = React.useRef<number>((width / (2 * Math.PI)));
+  const baseWorldWidthRef = React.useRef<number>(2 * Math.PI * baseScaleRef.current);
+
+  // If the container width changes (resize), update the base references —
+  // they are still independent of the current zoom `k`.
+  useEffect(() => {
+    baseScaleRef.current = (width / (2 * Math.PI));
+    baseWorldWidthRef.current = 2 * Math.PI * baseScaleRef.current;
+  }, [width]);
 
   // Load GeoJSON data
   useEffect(() => {
     const fetchData = async () => {    
       try {
-        const worldData = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+        const worldData = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'); // also 10, 50m
         setCountries((worldData as any));
       } catch (error) {
         console.error("Failed to load map data", error);
@@ -51,21 +70,42 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    // INFINITE PANNING LOGIC
-    // We convert the X translation (px) into rotation degrees.
-    // Standard Mercator projection width is related to scale.
-    // lambda (rotation) = (x / width) * 360
-    const lambda = (transform.x / width) * 360; 
-    
+    // INFINITE PANNING LOGIC (world-coordinate wrapping)
+    // Use a fixed base world width (based on initial/base scale) and wrap in
+    // world coordinates (x / k) so wrapping does NOT jump when k changes.
+    const baseScale = baseScaleRef.current; // fixed baseline scale
+    const baseWorldWidth = baseWorldWidthRef.current; // fixed baseline world width
+
+    const { x, y, k } = transform;
+
+    // Convert current pixel translation into world units (decoupled from k)
+    const worldX = x / k;
+
+    // Wrap inside the fixed world width (this does not depend on k)
+    const wrappedWorldX = ((worldX % baseWorldWidth) + baseWorldWidth) % baseWorldWidth;
+
+    // Convert back to pixel space for the current zoom
+    const renderX = wrappedWorldX * k;
+
+    // Projection scale respects zoom but baseScale is the fixed baseline
+    const projectionScale = baseScale * k;
+
+    // Compute rotation from the wrapped world position (normalized [0..1) * 360)
+    const lambda = (wrappedWorldX / baseWorldWidth) * 360;
+
     const projection = d3.geoMercator()
-      .scale((width / (2 * Math.PI)) * transform.k)
+      .scale(projectionScale)
       .translate([width / 2, height / 2 + transform.y])
       .rotate([lambda, 0]);
 
     const path = d3.geoPath(projection, context);
 
-    // Clear Canvas
+    // Clear Canvas + theme background
     context.clearRect(0, 0, width, height);
+    // Slightly off-white background in light mode for better contrast
+    const bgColor = darkMode ? '#0b1220' : '#f3f4f6';
+    context.fillStyle = bgColor;
+    context.fillRect(0, 0, width, height);
     context.lineJoin = 'round';
     context.lineCap = 'round';
 
@@ -73,16 +113,22 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
     context.beginPath();
     const countryFeatures = topojson.feature(countries, countries.objects.countries);
     path(countryFeatures);
-    context.fillStyle = '#ffffff';
+    context.fillStyle = darkMode ? '#071426' : '#f8fafc';
     context.fill();
-    context.lineWidth = 0.5;
-    context.strokeStyle = '#e5e7eb'; // Tailwind gray-200
+    context.lineWidth = 0.6;
+    context.strokeStyle = darkMode ? 'rgba(148,163,184,0.35)' : '#d1d5db'; // adjust for theme
     context.stroke();
 
     // 2. Draw Activities (Heatmap Effect)
     // We use 'multiply' blend mode to create darker areas where paths overlap
     context.globalCompositeOperation = 'multiply';
-    
+
+    const activityColors: Record<string, string> = {
+      Run: darkMode ? '#60a5fa' : '#3b82f6',
+      Ride: darkMode ? '#fb923c' : '#f97316',
+      Hike: darkMode ? '#4ade80' : '#22c55e',
+    };
+
     activities.forEach(activity => {
       context.beginPath();
       const geometry: any = {
@@ -94,12 +140,7 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
       // Keep lines relatively thin but visible
       context.lineWidth = Math.max(0.5, 1.5 / Math.sqrt(transform.k));
 
-      switch(activity.type) {
-        case 'Run': context.strokeStyle = '#3b82f6'; break; // blue-500
-        case 'Ride': context.strokeStyle = '#f97316'; break; // orange-500
-        case 'Hike': context.strokeStyle = '#22c55e'; break; // green-500
-        default: context.strokeStyle = '#3b82f6';
-      }
+      context.strokeStyle = activityColors[activity.type] ?? (darkMode ? '#60a5fa' : '#3b82f6');
       
       context.globalAlpha = 0.3; // Low opacity for accumulation
       context.stroke();
@@ -125,7 +166,7 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
         // Inner Dot
         context.beginPath();
         context.arc(x, y, radius, 0, 2 * Math.PI);
-        context.fillStyle = '#3b82f6';
+        context.fillStyle = darkMode ? '#60a5fa' : '#3b82f6';
         context.fill();
         context.strokeStyle = '#fff';
         context.lineWidth = 2;
@@ -134,21 +175,49 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
         // Breathing Ring effect
         context.beginPath();
         context.arc(x, y, radius + 6, 0, 2 * Math.PI);
-        context.strokeStyle = 'rgba(59, 130, 246, 0.2)';
+        context.strokeStyle = darkMode ? 'rgba(96,165,250,0.18)' : 'rgba(59, 130, 246, 0.2)';
         context.lineWidth = 2;
         context.stroke();
       }
     });
 
-  }, [countries, activities, anchors, transform, width, height, hoveredAnchor]);
+  }, [countries, activities, anchors, transform, width, height, hoveredAnchor, darkMode]);
+
+  // Toggle dark mode and persist
+  const toggleDarkMode = () => {
+    try {
+      const next = !darkMode;
+      setDarkMode(next);
+      localStorage.setItem('map:darkMode', next ? '1' : '0');
+      // Notify other components in the same page about the theme change
+      try {
+        window.dispatchEvent(new CustomEvent('map:darkModeChanged', { detail: next }));
+      } catch (e) {
+        // ignore
+      }
+    } catch (e) {
+      setDarkMode(v => !v);
+    }
+  };
 
   // Handle Interaction (Click & Hover)
   // We need to recreate the projection state to calculate distance from mouse to anchors
   const getProjection = () => {
+    // Mirror the renderer's world-coordinate wrapping so hit-testing matches
+    // what is drawn on screen.
+    const baseScale = baseScaleRef.current;
+    const baseWorldWidth = baseWorldWidthRef.current;
+    const { x, y, k } = transform;
+
+    const worldX = x / k;
+    const wrappedWorldX = ((worldX % baseWorldWidth) + baseWorldWidth) % baseWorldWidth;
+    const projectionScale = baseScale * k;
+    const lambda = (wrappedWorldX / baseWorldWidth) * 360;
+
     return d3.geoMercator()
-      .scale((width / (2 * Math.PI)) * transform.k)
+      .scale(projectionScale)
       .translate([width / 2, height / 2 + transform.y])
-      .rotate([(transform.x / width) * 360, 0]);
+      .rotate([lambda, 0]);
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
@@ -199,14 +268,26 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      onClick={handleCanvasClick}
-      onMouseMove={handleMouseMove}
-      className="block bg-white outline-none"
-    />
+    <div className="relative">
+      <div className="absolute right-2 top-2 z-10">
+        <button
+          onClick={toggleDarkMode}
+          className={`px-2 py-1 rounded text-sm shadow-sm ${darkMode ? 'bg-white/6 text-white' : 'bg-white/90 text-gray-800'}`}
+          aria-pressed={darkMode}
+          title="Toggle dark mode"
+        >
+          {darkMode ? '🌙' : '🌞'}
+        </button>
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        onClick={handleCanvasClick}
+        onMouseMove={handleMouseMove}
+        className={`block outline-none ${darkMode ? 'bg-slate-900' : 'bg-gray-50'}`}
+      />
+    </div>
   );
 };
 

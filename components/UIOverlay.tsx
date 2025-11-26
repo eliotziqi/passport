@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, MapPin, X, Globe, Calendar, Mail, Github, Youtube, Activity, Dribbble, ArrowRight } from 'lucide-react';
 import { MemoryAnchor, Bookmark } from '../types';
 
@@ -25,45 +25,88 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
     window.location.href = url;
   };
 
-  const getIcon = (title: string) => {
-      const t = title.toLowerCase();
-      if(t.includes('calendar')) return <Calendar size={14} />;
-      if(t.includes('mail')) return <Mail size={14} />;
-      if(t.includes('git')) return <Github size={14} />;
-      if(t.includes('tube')) return <Youtube size={14} />;
-      if(t.includes('strava')) return <Activity size={14} />;
-      if(t.includes('dribbble')) return <Dribbble size={14} />;
-      return <Globe size={14} />;
-  }
+  // placeholder; actual themed getIcon defined after darkMode so it can access theme
+  let getIcon = (title: string) => <Globe size={14} />;
+
+  // Local dark mode state — synced from localStorage or via custom event
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('map:darkMode') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Themed icon helper: in light mode icons are black, in dark mode white
+  getIcon = (title: string) => {
+    const iconClass = darkMode ? 'text-white' : 'text-black';
+    const t = title.toLowerCase();
+    if (t.includes('calendar')) return <Calendar size={14} className={iconClass} />;
+    if (t.includes('mail') || t.includes('gmail')) return <Mail size={14} className={iconClass} />;
+    if (t.includes('git')) return <Github size={14} className={iconClass} />;
+    if (t.includes('tube')) return <Youtube size={14} className={iconClass} />;
+    if (t.includes('strava') || t.includes('activity')) return <Activity size={14} className={iconClass} />;
+    return <Globe size={14} className={iconClass} />;
+  };
+
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try {
+        // CustomEvent detail holds the boolean
+        // @ts-ignore
+        const val = (ev as CustomEvent).detail;
+        if (typeof val === 'boolean') setDarkMode(val);
+      } catch (e) {}
+    };
+    window.addEventListener('map:darkModeChanged', handler as EventListener);
+
+    // Also listen to storage events (other tabs)
+    const storageHandler = (e: StorageEvent) => {
+      if (e.key === 'map:darkMode') {
+        setDarkMode(e.newValue === '1');
+      }
+    };
+    window.addEventListener('storage', storageHandler);
+
+    return () => {
+      window.removeEventListener('map:darkModeChanged', handler as EventListener);
+      window.removeEventListener('storage', storageHandler);
+    };
+  }, []);
 
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col items-center pt-[15vh]">
       
       {/* Header */}
       <div className="text-center mb-8 pointer-events-auto">
-        <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2">Eliot's Passport</h1>
-        <p className="text-gray-400 text-sm font-light tracking-wide">Digital footprint & browser start page</p>
+        <h1 className={`text-4xl font-bold tracking-tight mb-2 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Eliot's Passport</h1>
+        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-400'} text-sm font-light tracking-wide`}>Digital footprint & browser start page</p>
       </div>
 
       {/* Search Widget */}
       <div className="w-full max-w-xl px-4 pointer-events-auto mb-8 z-10">
         <form onSubmit={handleSearch} className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none select-none">
-            {searchEngine === 'google' && <span className="text-xl text-gray-400 font-bold">G</span>}
-            {searchEngine === 'github' && <Github className="text-gray-400" size={20} />}
-            {searchEngine === 'chatgpt' && <span className="text-xl text-emerald-500 font-bold">AI</span>}
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none select-none z-20">
+            {searchEngine === 'google' && <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black'}`}>G</span>}
+            {searchEngine === 'github' && <Github className={darkMode ? 'text-white' : 'text-black'} size={20} />}
+            {searchEngine === 'chatgpt' && (
+              <span className={`inline-flex items-center justify-center h-5 w-5 ${darkMode ? 'text-white' : 'text-black'}`}>
+                <svg className="h-5 w-5" width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                  <path d="M11.2475 18.25C10.6975 18.25 10.175 18.1455 9.67999 17.9365C9.18499 17.7275 8.74499 17.436 8.35999 17.062C7.94199 17.205 7.50749 17.2765 7.05649 17.2765C6.31949 17.2765 5.63749 17.095 5.01049 16.732C4.38349 16.369 3.87749 15.874 3.49249 15.247C3.11849 14.62 2.93149 13.9215 2.93149 13.1515C2.93149 12.8325 2.97549 12.486 3.06349 12.112C2.62349 11.705 2.28249 11.2375 2.04049 10.7095C1.79849 10.1705 1.67749 9.6095 1.67749 9.0265C1.67749 8.4325 1.80399 7.8605 2.05699 7.3105C2.30999 6.7605 2.66199 6.2875 3.11299 5.8915C3.57499 5.4845 4.10849 5.204 4.71349 5.05C4.83449 4.423 5.08749 3.862 5.47249 3.367C5.86849 2.861 6.35249 2.465 6.92449 2.179C7.49649 1.893 8.10699 1.75 8.75599 1.75C9.30599 1.75 9.82849 1.8545 10.3235 2.0635C10.8185 2.2725 11.2585 2.564 11.6435 2.938C12.0615 2.795 12.496 2.7235 12.947 2.7235C13.684 2.7235 14.366 2.905 14.993 3.268C15.62 3.631 16.1205 4.126 16.4945 4.753C16.8795 5.38 17.072 6.0785 17.072 6.8485C17.072 7.1675 17.028 7.514 16.94 7.888C17.38 8.295 17.721 8.768 17.963 9.307C18.205 9.835 18.326 10.3905 18.326 10.9735C18.326 11.5675 18.1995 12.1395 17.9465 12.6895C17.6935 13.2395 17.336 13.718 16.874 14.125C16.423 14.521 15.895 14.796 15.29 14.95C15.169 15.577 14.9105 16.138 14.5145 16.633C14.1295 17.139 13.651 17.535 13.079 17.821C12.507 18.107 11.8965 18.25 11.2475 18.25ZM7.17199 16.1875C7.72199 16.1875 8.20049 16.072 8.60749 15.841L11.7095 14.059C11.8195 13.982 11.8745 13.8775 11.8745 13.7455V12.3265L7.88149 14.62C7.63949 14.763 7.39749 14.763 7.15549 14.62L4.03699 12.8215C4.03699 12.8545 4.03149 12.893 4.02049 12.937C4.02049 12.981 4.02049 13.047 4.02049 13.135C4.02049 13.696 4.15249 14.213 4.41649 14.686C4.69149 15.148 5.07099 15.511 5.55499 15.775C6.03899 16.05 6.57799 16.1875 7.17199 16.1875ZM7.33699 13.498C7.40299 13.531 7.46349 13.5475 7.51849 13.5475C7.57349 13.5475 7.62849 13.531 7.68349 13.498L8.92099 12.7885L4.94449 10.4785C4.70249 10.3355 4.58149 10.121 4.58149 9.835V6.2545C4.03149 6.4965 3.59149 6.8705 3.26149 7.3765C2.93149 7.8715 2.76649 8.4215 2.76649 9.0265C2.76649 9.5655 2.90399 10.0825 3.17899 10.5775C3.45399 11.0725 3.81149 11.4465 4.25149 11.6995L7.33699 13.498ZM11.2475 17.161C11.8305 17.161 12.3585 17.029 12.8315 16.765C13.3045 16.501 13.6785 16.138 13.9535 15.676C14.2285 15.214 14.366 14.697 14.366 14.125V10.561C14.366 10.429 14.311 10.33 14.201 10.264L12.947 9.538V14.1415C12.947 14.4275 12.826 14.642 12.584 14.785L9.46549 16.5835C10.0045 16.9685 10.5985 17.161 11.2475 17.161ZM11.8745 11.122V8.878L10.01 7.822L8.12899 8.878V11.122L10.01 12.178L11.8745 11.122ZM7.05649 5.8585C7.05649 5.5725 7.17749 5.358 7.41949 5.215L10.538 3.4165C9.99899 3.0315 9.40499 2.839 8.75599 2.839C8.17299 2.839 7.64499 2.971 7.17199 3.235C6.69899 3.499 6.32499 3.862 6.04999 4.324C5.78599 4.786 5.65399 5.303 5.65399 5.875V9.4225C5.65399 9.5545 5.70899 9.659 5.81899 9.736L7.05649 10.462V5.8585ZM15.4385 13.7455C15.9885 13.5035 16.423 13.1295 16.742 12.6235C17.072 12.1175 17.237 11.5675 17.237 10.9735C17.237 10.4345 17.0995 9.9175 16.8245 9.4225C16.5495 8.9275 16.192 8.5535 15.752 8.3005L12.6665 6.5185C12.6005 6.4745 12.54 6.458 12.485 6.469C12.43 6.469 12.375 6.4855 12.32 6.5185L11.0825 7.2115L15.0755 9.538C15.1965 9.604 15.2845 9.692 15.3395 9.802C15.4055 9.901 15.4385 10.022 15.4385 10.165V13.7455ZM12.122 5.3635C12.364 5.2095 12.606 5.2095 12.848 5.3635L15.983 7.195C15.983 7.118 15.983 7019 15.983 6.898C15.983 6.37 15.851 5.8695 15.587 5.3965C15.334 4.9125 14.9655 4.5275 14.4815 4.2415C14.0085 3.9555 13.4585 3.8125 12.8315 3.8125C12.2815 3.8125 11.803 3.928 11.396 4.159L8.29399 5.941C8.18399 6.018 8.12899 6.1225 8.12899 6.2545V7.6735L12.122 5.3635Z"></path>
+                </svg>
+              </span> )}
           </div>
           <input
             type="text"
-            className="w-full bg-white/80 backdrop-blur-md border border-gray-200 text-gray-900 text-lg rounded-2xl py-4 pl-12 pr-24 shadow-sm hover:shadow-md focus:shadow-lg focus:outline-none focus:border-blue-400 transition-all duration-300 placeholder:text-gray-300"
-            placeholder={`Search ${searchEngine === 'chatgpt' ? 'ChatGPT' : searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1)}...`}
+            className={`w-full rounded-2xl py-4 pl-12 pr-24 text-lg transition-all duration-300 placeholder:text-gray-300 ${darkMode ? 'bg-slate-800/60 border border-slate-700 text-gray-100 shadow-sm' : 'bg-white/80 backdrop-blur-md border border-gray-200 text-gray-900 shadow-sm hover:shadow-md focus:shadow-lg focus:outline-none focus:border-blue-400'}`}
+            placeholder={searchEngine === 'chatgpt' ? 'Ask ChatGPT...' : `Search ${searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1)}...`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
           <button
             type="button"
-            className="absolute inset-y-0 right-2 px-3 flex items-center text-xs font-semibold text-gray-400 hover:text-gray-600 uppercase tracking-wider cursor-pointer"
+            className={`absolute inset-y-0 right-2 px-3 flex items-center text-xs font-semibold uppercase tracking-wider cursor-pointer ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
             onClick={() => {
               if(searchEngine === 'google') setSearchEngine('github');
               else if(searchEngine === 'github') setSearchEngine('chatgpt');
@@ -81,7 +124,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
           <a
             key={i}
             href={bm.url}
-            className="flex items-center gap-2 px-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-100 rounded-full text-sm text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-white transition-all shadow-sm"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition-all ${darkMode ? 'bg-slate-800/60 border border-slate-700 text-gray-200 hover:text-blue-300 hover:border-blue-800' : 'bg-white/70 backdrop-blur-sm border border-gray-100 text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-white'} shadow-sm`}
           >
             {getIcon(bm.title)}
             {bm.title}
@@ -93,14 +136,14 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
       {selectedAnchor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-auto bg-black/5 backdrop-blur-[2px]" onClick={onCloseAnchor}>
           <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden transform animate-scale-in"
+            className={`${darkMode ? 'bg-slate-900 text-gray-100' : 'bg-white text-gray-900'} rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden transform animate-scale-in`}
             onClick={e => e.stopPropagation()}
           >
             {selectedAnchor.imageUrl && (
               <div className="h-48 w-full overflow-hidden relative">
                  <img src={selectedAnchor.imageUrl} alt={selectedAnchor.title} className="w-full h-full object-cover" />
                  <div className="absolute top-2 right-2">
-                   <button onClick={onCloseAnchor} className="p-1 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-colors">
+                   <button onClick={onCloseAnchor} className={`p-1 rounded-full backdrop-blur-sm transition-colors ${darkMode ? 'bg-white/6 hover:bg-white/10 text-white' : 'bg-black/20 hover:bg-black/40 text-white'}`}>
                      <X size={16} />
                    </button>
                  </div>
@@ -109,7 +152,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
             <div className="p-6">
               {!selectedAnchor.imageUrl && (
                 <div className="flex justify-between items-start mb-4">
-                  <div className="p-2 bg-blue-50 text-blue-500 rounded-lg">
+                  <div className={`${darkMode ? 'p-2 bg-blue-900/20 text-blue-300 rounded-lg' : 'p-2 bg-blue-50 text-blue-500 rounded-lg'}`}>
                     <MapPin size={24} />
                   </div>
                   <button onClick={onCloseAnchor} className="text-gray-400 hover:text-gray-600">
@@ -118,16 +161,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
                 </div>
               )}
               
-              <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedAnchor.title}</h3>
-              <p className="text-sm text-blue-500 font-medium mb-3 flex items-center gap-1">
+              <h3 className={`text-xl font-bold mb-1 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{selectedAnchor.title}</h3>
+              <p className={`text-sm font-medium mb-3 flex items-center gap-1 ${darkMode ? 'text-blue-300' : 'text-blue-500'}`}>
                  <MapPin size={12} /> {selectedAnchor.locationName}
               </p>
               
-              <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-3 border-b border-gray-100 pb-2">
+              <div className={`text-xs uppercase tracking-widest font-semibold mb-3 pb-2 ${darkMode ? 'text-gray-400 border-slate-800' : 'text-gray-400 border-gray-100'}`}>
                 {selectedAnchor.date}
               </div>
               
-              <p className="text-gray-600 leading-relaxed text-sm">
+              <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} leading-relaxed text-sm`}>
                 {selectedAnchor.note}
               </p>
             </div>
@@ -136,7 +179,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bo
       )}
 
       {/* Legend */}
-      <div className="absolute bottom-8 flex gap-6 text-xs font-medium text-gray-400 pointer-events-none select-none">
+      <div className={`absolute bottom-8 flex gap-6 text-xs font-medium pointer-events-none select-none ${darkMode ? 'text-gray-300' : 'text-gray-400'}`}>
          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Ride</div>
          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Run</div>
          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Hike</div>
