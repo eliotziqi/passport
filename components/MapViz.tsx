@@ -13,7 +13,10 @@ interface MapVizProps {
 
 const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, width, height }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [countries, setCountries] = useState<any>(null);
+  const [worldTopo, setWorldTopo] = useState<any>(null);
+  const [admin1Topo, setAdmin1Topo] = useState<any>(null);
+  // Show admin1 (states/provinces) only when zoom scale >= this threshold
+  const ADMIN1_ZOOM_THRESHOLD = 4;
   const [transform, setTransform] = useState<{ k: number; x: number; y: number }>({ k: 1, x: 0, y: 0 });
   const [hoveredAnchor, setHoveredAnchor] = useState<string | null>(null);
 
@@ -21,17 +24,12 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
   useEffect(() => {
     const fetchData = async () => {
       const [world, admin1] = await Promise.all([
-      fetch('/data/ne_10m_admin_0_countries.json').then(r => r.json()),
-      fetch('/data/ne_10m_admin_1_states_provinces.json').then(r => r.json()),
+        fetch('/data/ne_10m_admin_0_countries.json').then(r => r.json()),
+        fetch('/data/ne_10m_admin_1_states_provinces.json').then(r => r.json()),
       ]);
-      setWorldData(world);
-      
-      try {
-        const worldData = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
-        setCountries((worldData as any));
-      } catch (error) {
-        console.error("Failed to load map data", error);
-      }
+
+      setWorldTopo(world);
+      setAdmin1Topo(admin1);
     };
     fetchData();
   }, []);
@@ -52,7 +50,7 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
   // Main Rendering Loop
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !countries) return;
+    if (!canvas || !worldTopo) return;
 
     const context = canvas.getContext('2d');
     if (!context) return;
@@ -77,8 +75,9 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
 
     // 1. Draw Countries (Admin-0)
     context.beginPath();
-    const countryFeatures = topojson.feature(countries, countries.objects.countries);
-    path(countryFeatures);
+    const countryObjKey = Object.keys(worldTopo.objects)[0];
+    const countryFeatures = topojson.feature(worldTopo, worldTopo.objects[countryObjKey]);
+    path(countryFeatures as any);
     context.fillStyle = '#ffffff';
     context.fill();
     context.lineWidth = 0.5;
@@ -115,7 +114,25 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1.0;
 
-    // 3. Draw Memory Anchors
+    // 3. Draw admin1 (states/provinces) when zoomed in enough
+    if (admin1Topo && transform.k >= ADMIN1_ZOOM_THRESHOLD) {
+      try {
+        const admin1Key = Object.keys(admin1Topo.objects)[0];
+        const admin1Features = topojson.feature(admin1Topo, admin1Topo.objects[admin1Key]);
+        context.beginPath();
+        path(admin1Features as any);
+        context.fillStyle = 'rgba(100,116,139,0.02)'; // subtle fill (slate-500 @ low alpha)
+        context.fill();
+        context.lineWidth = 0.4;
+        context.strokeStyle = 'rgba(100,116,139,0.4)';
+        context.stroke();
+      } catch (err) {
+        // If topojson structure unexpected, fail gracefully
+        console.warn('Could not render admin1 features', err);
+      }
+    }
+
+    // 4. Draw Memory Anchors
     anchors.forEach(anchor => {
       const [lon, lat] = anchor.coordinate;
       const pos = projection([lon, lat]);
@@ -146,7 +163,7 @@ const MapViz: React.FC<MapVizProps> = ({ activities, anchors, onAnchorClick, wid
       }
     });
 
-  }, [countries, activities, anchors, transform, width, height, hoveredAnchor]);
+  }, [worldTopo, admin1Topo, activities, anchors, transform, width, height, hoveredAnchor]);
 
   // Handle Interaction (Click & Hover)
   // We need to recreate the projection state to calculate distance from mouse to anchors
