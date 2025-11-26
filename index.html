@@ -3,44 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eliot's Passport - Start Page</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
-            colors: {
-              'brand-ride': '#f97316', // Orange
-              'brand-run': '#3b82f6',  // Blue
-              'brand-hike': '#22c55e', // Green
-              'map-stroke': '#e5e7eb', // Gray-200
-            },
-            animation: {
-              'breathe': 'breathe 2s infinite ease-in-out',
-            },
-            keyframes: {
-              breathe: {
-                '0%, 100%': { transform: 'scale(1)', opacity: '0.8' },
-                '50%': { transform: 'scale(1.5)', opacity: '0.4' },
-              }
-            }
-          }
-        }
-      }
-    </script>
+    <title>Eliot's Passport</title>
+
+    <!-- 字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
       body {
         margin: 0;
         overflow: hidden;
-        background-color: #ffffff;
+        background-color: white;
+        font-family: Inter, sans-serif;
       }
-      /* Custom Scrollbar for overlays */
+
+      /* Overlay scrollbar */
       ::-webkit-scrollbar {
         width: 6px;
       }
@@ -52,22 +33,10 @@
         border-radius: 3px;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "d3": "https://aistudiocdn.com/d3@^7.9.0",
-    "topojson-client": "https://aistudiocdn.com/topojson-client@^3.1.0",
-    "@turf/turf": "https://cdn.jsdelivr.net/npm/@turf/turf@6/+esm"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+  </head>
+
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

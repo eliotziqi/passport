@@ -1,0 +1,37 @@
+/* Tailwind 指令：一定要放在最上面 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局基础设置（替代原来那一大坨 Vite 默认样式） */
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 我们的页面是全屏地图，不要 Vite 模板的居中 flex */
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+/* 让 React root 占满整个视口 */
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* 细节：滚动条美化，用在 overlay 卡片上 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
