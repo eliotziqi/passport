@@ -9,7 +9,7 @@ interface UIOverlayProps {
 }
 
 const UIOverlay: React.FC<UIOverlayProps> = ({ selectedAnchor, onCloseAnchor, bookmarks }) => {
-  const [searchEngine, setSearchEngine] = useState<'google' | 'github' | 'chatgpt'>('google');
+  const [searchEngine, setSearchEngine] = useState<'google' | 'github' | 'chatgpt'>('chatgpt');
   const [query, setQuery] = useState('');
 
   const handleSearch = (e: React.FormEvent) => {
