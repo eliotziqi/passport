@@ -1,0 +1,5 @@
+{
+  "name": "Eliot's Passport",
+  "description": "A minimalist personal data homepage visualizing travel history and future plans using D3.js and React.",
+  "requestFramePermissions": []
+}
